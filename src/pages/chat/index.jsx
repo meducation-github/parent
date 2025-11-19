@@ -25,6 +25,8 @@ import { InstituteContext, UserContext } from "../../context/contexts";
 import MediaMessage from "./components/MediaMessage";
 import FileUpload from "./components/FileUpload";
 import mediaUploadService from "./services/mediaUploadService";
+import { useChatPreferences } from "../../context/chatPreferencesContext";
+import { Button } from "../../components/ui/button";
 
 const Chat = () => {
   const { authState, userState } = useContext(UserContext);
@@ -53,6 +55,7 @@ const Chat = () => {
   const [isUploading, setIsUploading] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const { floatingEnabled, setFloatingEnabled } = useChatPreferences();
   const currentConversationRef = useRef(null);
   const currentViewRef = useRef(null);
   const lastReadTimestampsRef = useRef({});
@@ -1500,60 +1503,81 @@ const Chat = () => {
 
   // Desktop view - two columns
   return (
-    <div className="h-[calc(100vh-50px)] bg-white flex rounded-lg">
-      {/* Left Sidebar - Conversations */}
-      <div className="w-80 border-r border-gray-200 rounded-lg">
-        <AnimatePresence mode="wait">
-          {(currentView === "conversations" || currentView === "chat") && (
-            <motion.div
-              key="conversations"
-              className="h-full"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              {renderConversationsList()}
-            </motion.div>
-          )}
-
-          {currentView === "search" && (
-            <motion.div
-              key="search"
-              className="h-full"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              {renderSearchView()}
-            </motion.div>
-          )}
-        </AnimatePresence>
+    <div className="space-y-4">
+      <div className="rounded-2xl border bg-white/80 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-foreground">
+            Floating chat popup
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {floatingEnabled
+              ? "Enabled — the chat bubble stays available on every page."
+              : "Disabled — turn it on to reply without leaving other modules."}
+          </p>
+        </div>
+        <Button
+          variant={floatingEnabled ? "secondary" : "outline"}
+          size="sm"
+          onClick={() => setFloatingEnabled((prev) => !prev)}
+        >
+          {floatingEnabled ? "Disable popup" : "Enable popup"}
+        </Button>
       </div>
+      <div className="h-[calc(100vh-50px)] bg-white flex rounded-lg">
+        {/* Left Sidebar - Conversations */}
+        <div className="w-80 border-r border-gray-200 rounded-lg">
+          <AnimatePresence mode="wait">
+            {(currentView === "conversations" || currentView === "chat") && (
+              <motion.div
+                key="conversations"
+                className="h-full"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                {renderConversationsList()}
+              </motion.div>
+            )}
 
-      {/* Right Side - Chat Area */}
-      <div className="flex-1 rounded-lg">
-        {currentView === "chat" && currentConversation ? (
-          <motion.div
-            className="h-full"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            {renderChatView()}
-          </motion.div>
-        ) : (
-          <div className="h-full flex items-center justify-center bg-[#efeae2]">
-            <div className="text-center text-gray-500">
-              <MessageCircle size={64} className="mx-auto mb-4 opacity-30" />
-              <p className="text-lg font-medium mb-2">Welcome to Chat</p>
-              <p className="text-sm">
-                Select a conversation to start messaging
-              </p>
+            {currentView === "search" && (
+              <motion.div
+                key="search"
+                className="h-full"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                {renderSearchView()}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Right Side - Chat Area */}
+        <div className="flex-1 rounded-lg">
+          {currentView === "chat" && currentConversation ? (
+            <motion.div
+              className="h-full"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              {renderChatView()}
+            </motion.div>
+          ) : (
+            <div className="h-full flex items-center justify-center bg-[#efeae2]">
+              <div className="text-center text-gray-500">
+                <MessageCircle size={64} className="mx-auto mb-4 opacity-30" />
+                <p className="text-lg font-medium mb-2">Welcome to Chat</p>
+                <p className="text-sm">
+                  Select a conversation to start messaging
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

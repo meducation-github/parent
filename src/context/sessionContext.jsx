@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import PropTypes from "prop-types";
 import { SessionContext } from "./contexts";
 
 export const SessionProvider = ({ children }) => {
   const [sessionState, setSessionState] = useState([]);
 
-  const setSession = (param) => {
-    setSessionState(param);
-  };
+  const setSession = useCallback(
+    (param) => {
+      setSessionState(param);
+    },
+    [setSessionState]
+  );
 
   return (
     <SessionContext.Provider

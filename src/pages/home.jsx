@@ -14,6 +14,9 @@ import {
 import { supabase } from "../config/env";
 import { Link, useNavigate } from "react-router-dom";
 import { StudentsContext, ParentContext } from "../context/contexts";
+import { toast } from "react-hot-toast";
+
+const STUDENT_PORTAL_URL = "https://student.meducation.pk";
 
 const Home = () => {
   const { studentsState } = useContext(StudentsContext);
@@ -33,41 +36,46 @@ const Home = () => {
     setLoginLoading((prev) => ({ ...prev, [student.id]: true }));
 
     try {
-      // Get current session and access token
-      const {
+      let {
         data: { session },
         error: sessionError,
       } = await supabase.auth.getSession();
 
       if (sessionError) {
         console.error("Session error:", sessionError);
-
-        return;
       }
 
       if (!session) {
-        console.error("No active session found. Please login again.");
-        return;
+        const {
+          data: refreshedData,
+          error: refreshError,
+        } = await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshedData.session) {
+          throw new Error("Unable to refresh Supabase session");
+        }
+        session = refreshedData.session;
       }
 
-      // Get the access token
-      const accessToken = session.access_token;
+      const accessToken = session?.access_token;
 
       if (!accessToken) {
-        console.error("No access token found. Please login again.");
-        return;
+        throw new Error("Missing access token");
       }
 
       // Redirect to student portal with access token
-      const redirectUrl = `https://student.meducation.pk?token=${encodeURIComponent(
+      const redirectUrl = `${STUDENT_PORTAL_URL}?token=${encodeURIComponent(
         accessToken
-      )}&student_id=${encodeURIComponent(student.id)}`;
+      )}&student_id=${encodeURIComponent(student.id)}${
+        parentState?.id ? `&parent_id=${encodeURIComponent(parentState.id)}` : ""
+      }`;
 
       // Open in new tab/window
-      window.open(redirectUrl, "_blank");
+      window.open(redirectUrl, "_blank", "noopener,noreferrer");
+      toast.success(`Opening ${student.first_name}'s portal`);
     } catch (error) {
       console.error("Redirect error:", error);
-      console.error("An error occurred. Please try again.");
+      toast.error("Unable to open the student portal. Please try again.");
     } finally {
       setLoginLoading((prev) => ({ ...prev, [student.id]: false }));
     }

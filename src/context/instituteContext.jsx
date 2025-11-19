@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import PropTypes from "prop-types";
 import { InstituteContext } from "./contexts";
 
 export const InstituteProvider = ({ children }) => {
   const [instituteState, setInstituteState] = useState([]);
 
-  const setInstitute = (param) => {
-    setInstituteState(param);
-  };
+  const setInstitute = useCallback(
+    (param) => {
+      setInstituteState(param);
+    },
+    [setInstituteState]
+  );
 
   return (
     <InstituteContext.Provider

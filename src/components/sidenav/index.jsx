@@ -1,184 +1,212 @@
-import { NavLink } from "react-router-dom";
-import { LuLogOut } from "react-icons/lu";
-import { useContext, useState, useEffect } from "react";
-import { SidenavContext } from "../../context/contexts";
-import { useNavigate } from "react-router-dom";
+import { useContext, useMemo } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import {
+  LucideBell,
+  LucideHome,
+  LucideMessageCircle,
+  LucideSettings,
+  LucideDoorOpen,
+  LucideChevronLeft,
+  LucideChevronRight,
+} from "lucide-react";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Separator } from "../ui/separator";
+import { Avatar, AvatarFallback } from "../ui/avatar";
+import { cn } from "../../lib/utils/cn";
 import { supabase } from "../../config/env";
 import {
-  LucideGraduationCap,
-  LucideUserCircle,
-  LucideWallet,
-  LucideCalendar,
-  LucideBookOpen,
-} from "lucide-react";
+  ParentContext,
+  InstituteContext,
+  SidenavContext,
+} from "../../context/contexts";
+import { useNotifications } from "../../context/notificationContext";
 
-const STAFF_ID = localStorage.getItem("staff_id");
+const navItems = [
+  {
+    title: "Dashboard",
+    to: "/",
+    icon: LucideHome,
+    description: "Overview of your children and institute",
+  },
+  {
+    title: "Notifications",
+    to: "/notifications",
+    icon: LucideBell,
+    description: "Updates from your institute",
+  },
+  {
+    title: "Chat",
+    to: "/chat",
+    icon: LucideMessageCircle,
+    description: "Instantly talk to institute staff",
+  },
+  {
+    title: "Profile Settings",
+    to: "/settings",
+    icon: LucideSettings,
+    description: "Manage your parent profile",
+  },
+];
 
-export function Sidenav() {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+export function Sidenav({ onNavigate, isMobile = false }) {
+  const { parentState } = useContext(ParentContext);
+  const { instituteState } = useContext(InstituteContext);
+  const { unreadCount } = useNotifications();
   const { isMinimized, setIsMinimized } = useContext(SidenavContext);
-  const [isSmallScreen, setIsSmallScreen] = useState(false);
-  const [isMediumScreen, setIsMediumScreen] = useState(false);
-  const [staffData, setStaffData] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const navigation = useNavigate();
-
-  useEffect(() => {
-    const fetchStaffData = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("staff")
-          .select("*")
-          .eq("id", STAFF_ID)
-          .single();
-
-        if (error) throw error;
-        setStaffData(data);
-      } catch (error) {
-        console.error("Error fetching staff data:", error);
-      }
-    };
-
-    fetchStaffData();
-  }, []);
-
-  useEffect(() => {
-    const checkScreenSize = () => {
-      setIsSmallScreen(window.innerWidth < 768); // md breakpoint
-      setIsMediumScreen(window.innerWidth >= 768 && window.innerWidth < 1024); // between md and lg
-    };
-
-    checkScreenSize();
-    window.addEventListener("resize", checkScreenSize);
-
-    return () => window.removeEventListener("resize", checkScreenSize);
-  }, []);
+  const initials = useMemo(() => {
+    if (!parentState?.first_name) return "P";
+    const first = parentState.first_name?.[0] || "";
+    const last = parentState.last_name?.[0] || "";
+    return `${first}${last}`.toUpperCase() || "P";
+  }, [parentState]);
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error("Error logging out:", error.message);
-    } else {
+    try {
+      await supabase.auth.signOut();
+      localStorage.removeItem("students");
+      localStorage.removeItem("parent");
+      localStorage.removeItem("user_id");
+      localStorage.removeItem("session");
+      localStorage.removeItem("staff_id");
+      localStorage.removeItem("student_id");
       localStorage.removeItem("entryCreated");
-      navigation("/login");
-      console.log("User logged out successfully");
+      navigate("/login");
+    } catch (error) {
+      console.error("Error logging out:", error);
     }
   };
 
-  const baseModules = [
-    {
-      name: "Profile",
-      link: "./",
-      icon: <LucideUserCircle className="w-4 lg:w-5" />,
-    },
-    {
-      name: "Modules",
-      link: "./modules",
-      icon: <LucideBookOpen className="w-4 lg:w-5" />,
-    },
-    {
-      name: "Salary",
-      link: "./finance",
-      icon: <LucideWallet className="w-4 lg:w-5" />,
-    },
-    {
-      name: "Attendance",
-      link: "./attendance",
-      icon: <LucideCalendar className="w-4 lg:w-5" />,
-    },
-  ];
+  const handleCollapseToggle = () => {
+    setIsMinimized(!isMinimized);
+  };
 
-  const Modules = baseModules;
+  const showText = !isMinimized || isMobile;
+
+  const renderNavItem = (item) => {
+    const Icon = item.icon;
+    const isActive = location.pathname === item.to;
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        onClick={() => {
+          onNavigate?.();
+        }}
+        className={({ isActive: navActive }) =>
+          cn(
+            "group relative flex items-center rounded-2xl px-3 py-3 text-sm font-medium transition-colors",
+            navActive || isActive
+              ? "bg-primary/10 text-primary"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          )
+        }
+      >
+        <Icon className="mr-3 h-5 w-5 shrink-0" />
+        {showText && (
+          <div className="flex flex-1 flex-col">
+            <span>{item.title}</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {item.description}
+            </span>
+          </div>
+        )}
+        {item.title === "Notifications" && unreadCount > 0 && (
+          <Badge className="ml-auto">{unreadCount}</Badge>
+        )}
+      </NavLink>
+    );
+  };
 
   return (
     <div
-      className={`rounded-md px-1 relative bg-white h-full flex flex-col overflow-hidden transition-all duration-300 ${
-        isMinimized || isMediumScreen ? "w-13.5" : "auto"
-      }`}
+      className={cn(
+        "relative flex h-full flex-col border-r bg-gradient-to-b from-white/90 to-slate-50/70 p-4 backdrop-blur",
+        !isMobile && "transition-all duration-300",
+        !isMobile && (isMinimized ? "w-[80px]" : "w-72")
+      )}
     >
-      <div
-        className="text-left ml-1 select-none items-center p-1 font-bold text-xl py-1 cursor-pointer hover:text-zinc-800 transition-colors"
-        onClick={() =>
-          !isSmallScreen && !isMediumScreen && setIsMinimized(!isMinimized)
-        }
-      >
-        <h1 className="text-left mt-4 text-xl lg:text-xl font-bold text-blue-600 p-1">
-          {isMinimized || isMediumScreen ? (
-            <span className="text-base">ME</span>
-          ) : (
-            <span className="">MEd Staff</span>
-          )}
-        </h1>
-      </div>
-      <nav className="mt-2 md:mt-5">
-        {Modules.map((item) => (
+      <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-white/80 px-3 py-2 shadow-sm">
+        {showText && (
           <div>
-            <NavLink
-              to={item.link}
-              key={item.name}
-              title={item.name}
-              className={({ isActive }) =>
-                `flex items-center gap-3 lg:gap-4 text-gray-600 py-1.5 lg:py-3 px-2 lg:px-3 my-0.5 lg:my-1 rounded-md hover:bg-gray-200 ${
-                  isActive ? "bg-gray-200 !text-blue-600" : ""
-                }`
-              }
-            >
-              <div className="flex items-center justify-center">
-                {item.icon}
-              </div>
-              {!isMinimized && !isMediumScreen && (
-                <p className="truncate text-xs lg:text-base">{item.name}</p>
-              )}
-            </NavLink>
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">
+              MEducation
+            </p>
+            <p className="text-sm font-semibold text-foreground">
+              Parent Portal
+            </p>
           </div>
-        ))}
-      </nav>
-      <div className="absolute bottom-0">
-        <div className="mt-0 mb-1 relative">
-          <div
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-3 lg:gap-4 p-1.5 lg:p-2 my-0.5 lg:my-1 rounded-md hover:bg-gray-200 cursor-pointer group relative"
+        )}
+        {!isMobile && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleCollapseToggle}
+            className="h-8 w-8"
+            title={isMinimized ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <div
-              className="flex items-center justify-center w-7 h-7 lg:w-8 lg:h-8 rounded-full bg-blue-100 text-blue-600 font-semibold"
-              title={
-                isMinimized || isMediumScreen
-                  ? `${staffData?.name}\n${staffData?.email}`
-                  : undefined
-              }
-            >
-              {staffData?.name?.charAt(0)?.toUpperCase()}
-            </div>
-            {!isMinimized && !isMediumScreen && (
-              <div className="flex flex-col">
-                <span className="truncate text-xs lg:text-sm md:font-medium">
-                  {staffData?.name}
-                </span>
-                <span className="text-[10px] lg:text-xs text-gray-500 truncate">
-                  {staffData?.email}
-                </span>
+            {isMinimized ? <LucideChevronRight size={16} /> : <LucideChevronLeft size={16} />}
+          </Button>
+        )}
+      </div>
+      <Separator className="my-4" />
+      <div className="space-y-1">{navItems.map(renderNavItem)}</div>
+      <div className="mt-auto space-y-4">
+        <Separator />
+        <div
+          className={cn(
+            "rounded-2xl border border-border/40 bg-white/80 p-3 shadow-inner",
+            isMinimized && "px-2 py-2 text-center"
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10 bg-primary/10 text-primary">
+              <AvatarFallback>{initials}</AvatarFallback>
+            </Avatar>
+            {showText && (
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {parentState
+                    ? `${parentState?.first_name ?? ""} ${
+                        parentState?.last_name ?? ""
+                      }`
+                    : "Parent"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {instituteState?.name || "Institute"}
+                </p>
               </div>
             )}
           </div>
-
-          {isDropdownOpen && (
-            <div
-              className={`absolute bottom-full left-0 ${
-                isMinimized || isMediumScreen ? "" : "right-0"
-              } mb-2 bg-white rounded-md border border-gray-200`}
+          {showText && parentState?.email && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {parentState.email}
+            </p>
+          )}
+          {showText && (
+            <Button
+              variant="outline"
+              className="mt-3 w-full text-sm font-medium"
+              onClick={() => navigate("/settings")}
             >
-              <button
-                onClick={handleLogout}
-                className="flex w-full cursor-pointer items-center gap-3 lg:gap-4 p-2 lg:p-3 hover:bg-gray-100 text-left text-red-600"
-              >
-                <LuLogOut className="w-4 lg:w-5" />
-                {!isMinimized && !isMediumScreen && (
-                  <span className="text-sm lg:text-base">Logout</span>
-                )}
-              </button>
-            </div>
+              Manage profile
+            </Button>
           )}
         </div>
+        <Button
+          variant="ghost"
+          className={cn(
+            "w-full justify-center gap-2 text-sm font-semibold text-destructive hover:text-destructive",
+            !showText && "px-2"
+          )}
+          onClick={handleLogout}
+        >
+          <LucideDoorOpen className="h-4 w-4" />
+          {showText && <span>Logout</span>}
+        </Button>
       </div>
     </div>
   );

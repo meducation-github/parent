@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useContext, useEffect, useState } from "react";
 import { supabase } from "./config/env";
 import {
@@ -8,33 +8,37 @@ import {
   ParentContext,
   InstituteContext,
 } from "./context/contexts";
-import { LucideSidebarClose, LucideSidebarOpen } from "lucide-react";
+import { Button } from "./components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
 import { Sidenav } from "./components/sidenav";
+import { LucideMenu, LucideBell, LucideMessageCircle } from "lucide-react";
+import { Badge } from "./components/ui/badge";
+import { useNotifications } from "./context/notificationContext";
+import { Toaster } from "react-hot-toast";
+import { useChatPreferences } from "./context/chatPreferencesContext";
+import ChatPopup from "./pages/chat/chatPopup";
 
 function App() {
   const { login, setUser } = useContext(UserContext);
-  const { setStudents } = useContext(StudentsContext);
-  const { setParent } = useContext(ParentContext);
-  const { setInstitute } = useContext(InstituteContext);
+  const { studentsState, setStudents } = useContext(StudentsContext);
+  const { parentState, setParent } = useContext(ParentContext);
+  const { instituteState, setInstitute } = useContext(InstituteContext);
+  const { setUser: setNotificationUser, unreadCount } = useNotifications();
   const [isMinimized, setIsMinimized] = useState(false);
-  const [isMobileSidenavOpen, setIsMobileSidenavOpen] = useState(false);
-  const [isMediumScreen, setIsMediumScreen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const navigation = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
+  const { floatingEnabled } = useChatPreferences();
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMediumScreen(window.innerWidth >= 768 && window.innerWidth < 1024);
+      setIsMinimized(window.innerWidth < 1280);
     };
 
-    // Initial check
     handleResize();
-
-    // Add event listener
     window.addEventListener("resize", handleResize);
-
-    // Cleanup
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
@@ -47,10 +51,9 @@ function App() {
         setProgress((prev) => (prev < 90 ? prev + Math.random() * 10 : prev));
       }, 50);
       const { data, error } = await supabase.auth.getUser();
-      console.log(data);
       if (data?.user) {
         login(data.user);
-        console.log(data.user.id);
+        setNotificationUser(data.user);
         localStorage.setItem("user_id", data.user.id);
 
         const { data: userData, error: userError } = await supabase
@@ -61,30 +64,32 @@ function App() {
 
         if (userError) {
           console.error("Error fetching user data:", userError);
+          setLoading(false);
+          clearInterval(progressInterval);
+          navigation("/login");
           return;
         }
         setUser(userData);
         localStorage.setItem("parent", JSON.stringify(userData));
-        setParent(userData); // Set parent in context
+        setParent(userData);
 
-        // get institute associated with Parent
         const { data: instituteData, error: instituteError } = await supabase
           .from("institutes")
           .select("*")
           .eq("id", userData.institute_id)
           .single();
 
-        if (instituteError) {
-          console.error("Error fetching institute data:", instituteError);
-          return;
+        if (!instituteError && instituteData) {
+          setInstitute(instituteData);
         }
-        setInstitute(instituteData);
 
-        // string to array
-        const studentIds = userData.student_ids.split(",");
-        const studentsArray = []; // Create an array to store all students
+        const studentIds = userData.student_ids
+          ? userData.student_ids.split(",").map((id) => id.trim())
+          : [];
+        const studentsArray = [];
 
         for (const studentId of studentIds) {
+          if (!studentId) continue;
           const { data: studentData, error: studentError } = await supabase
             .from("students")
             .select("*")
@@ -92,18 +97,16 @@ function App() {
             .single();
           if (studentError) {
             console.error("Error fetching student data:", studentError);
-            return;
+            continue;
           }
-          // student object store in array
           studentsArray.push(studentData);
-          console.log(studentData);
         }
 
         localStorage.setItem("students", JSON.stringify(studentsArray));
-        setStudents(studentsArray); // Set students in context
+        setStudents(studentsArray);
 
         setProgress(100);
-        setTimeout(() => setLoading(false), 50); // allow bar to finish
+        setTimeout(() => setLoading(false), 150);
         clearInterval(progressInterval);
       } else {
         setLoading(false);
@@ -113,88 +116,132 @@ function App() {
       }
     };
     fetchUser();
-  }, []);
+  }, [
+    login,
+    navigation,
+    setInstitute,
+    setNotificationUser,
+    setParent,
+    setStudents,
+    setUser,
+  ]);
+
+  const studentCount = studentsState?.length ?? 0;
 
   return (
     <SidenavContext.Provider value={{ isMinimized, setIsMinimized }}>
-      <div>
-        {loading && (
-          <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white transition-all">
-            <h1 className="text-4xl font-black mb-4 tracking-wide flex">
-              {["M", "E", "d", " ", "P", "a", "r", "e", "n", "t"].map(
-                (letter, index) => {
-                  const letterProgress = (index + 1) * 10; // Each letter represents 10% progress
-                  const isFilled = progress >= letterProgress;
-                  return (
-                    <span
-                      key={index}
-                      className={`transition-colors duration-300 ${
-                        isFilled ? "text-blue-600" : "text-zinc-200"
-                      }`}
-                      style={{ letterSpacing: "0.05em" }}
-                    >
-                      {letter}
-                    </span>
-                  );
-                }
-              )}
-            </h1>
-          </div>
-        )}
-        <div className="sm:flex w-full h-screen">
-          {/* <div className="block sm:hidden">
-            <div className="flex items-center border-b border-gray-200 justify-between">
-              <div className="flex-1">
-                <div className="text-left ml-2 select-none flex items-center p-1 font-bold text-xl py-4 cursor-pointer hover:text-zinc-800 transition-colors">
-                  <Link to="/">
-                    <h1 className="text-center text-2xl font-semibold p-1">
-                      MEd Staff
-                    </h1>
-                  </Link>
+      <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
+        <div className="flex min-h-screen bg-muted/40 overflow-hidden">
+          <aside className="hidden lg:block">
+            <div className="sticky top-0 h-screen">
+              <Sidenav />
+            </div>
+          </aside>
+
+          <SheetContent
+            side="left"
+            className="w-[85%] border-r p-0 sm:max-w-sm lg:hidden"
+          >
+            <Sidenav
+              isMobile
+              onNavigate={() => setIsMobileNavOpen(false)}
+            />
+          </SheetContent>
+
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <header className="sticky top-0 z-20 flex items-center justify-between border-b bg-white/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/60 lg:px-8">
+              <div className="flex items-center gap-3">
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="lg:hidden"
+                    aria-label="Toggle sidebar"
+                  >
+                    <LucideMenu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    {instituteState?.name || "MEducation Institute"}
+                  </p>
+                  <h1 className="text-lg font-semibold text-foreground">
+                    Welcome back{" "}
+                    {parentState?.first_name
+                      ? parentState.first_name
+                      : "there"}
+                  </h1>
                 </div>
               </div>
-              <div
-                className="hover:bg-gray-100 rounded-md mx-2 px-4 py-4"
-                onClick={() => setIsMobileSidenavOpen(true)}
-              >
-                {isMobileSidenavOpen ? (
-                  <LucideSidebarClose />
-                ) : (
-                  <LucideSidebarOpen />
-                )}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  className="relative"
+                  onClick={() => navigation("/notifications")}
+                >
+                  <LucideBell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <Badge className="absolute -right-1 -top-1 h-5 w-5 justify-center rounded-full p-0 text-[11px]">
+                      {unreadCount}
+                    </Badge>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => navigation("/chat")}
+                >
+                  <LucideMessageCircle className="h-4 w-4" />
+                  <span className="hidden sm:inline">Open chat</span>
+                </Button>
               </div>
-            </div>
-          </div> */}
-          {/* <div
-            className={`fixed sm:sticky top-0 h-screen rounded-lg p-2 sm:block transition-all duration-300 ${
-              isMinimized || isMediumScreen
-                ? "sm:w-20"
-                : "sm:w-3/12 md:w-2/12 lg:w-2/12 xl:w-2/12"
-            } ${
-              isMobileSidenavOpen
-                ? "top-0 left-0 w-[80%] block"
-                : "-left-full hidden"
-            }  z-50`}
-          >
-            <Sidenav />
-          </div>
+            </header>
 
-          {isMobileSidenavOpen && (
-            <div
-              className="fixed inset-0 bg-black/10 z-40 sm:hidden"
-              onClick={() => setIsMobileSidenavOpen(false)}
-            />
-          )} */}
-
-          <div className="flex-1 pr-2 h-screen overflow-y-auto">
-            <div
-              className={`w-full rounded-lg my-2 transition-all duration-300 px-4 py-1`}
-            >
-              <Outlet />
-            </div>
+            <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-10">
+              {loading ? (
+                <div className="flex h-[70vh] flex-col items-center justify-center gap-5">
+                  <h1 className="text-3xl font-black tracking-wide text-primary">
+                    MEducation
+                  </h1>
+                  <div className="h-2 w-48 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full w-full origin-left rounded-full bg-primary transition-all duration-200"
+                      style={{ transform: `scaleX(${progress / 100})` }}
+                    ></div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Preparing your personalized parent dashboard...
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl border bg-white/80 p-4 shadow-sm">
+                      <p className="text-xs uppercase text-muted-foreground tracking-wide">
+                        Students linked
+                      </p>
+                      <p className="mt-2 text-3xl font-semibold">
+                        {studentCount}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border bg-white/80 p-4 shadow-sm">
+                      <p className="text-xs uppercase text-muted-foreground tracking-wide">
+                        Notifications
+                      </p>
+                      <p className="mt-2 text-3xl font-semibold">
+                        {unreadCount}
+                      </p>
+                    </div>
+                  </div>
+                  <Outlet />
+                </div>
+              )}
+            </main>
           </div>
         </div>
-      </div>
+        {floatingEnabled && location.pathname !== "/chat" && <ChatPopup />}
+        <Toaster position="top-right" />
+      </Sheet>
     </SidenavContext.Provider>
   );
 }
